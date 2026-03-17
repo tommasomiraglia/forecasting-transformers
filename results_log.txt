@@ -25,3 +25,6 @@ Forest predictions (shape (1, 18)):
 Ground-truth test targets (shape (1, 18)):
 [[0.3617, 0.0426, 0.8511, 0.2979, 0.1064, 0.4043, 0.234 , 0.2128, 0.    , 0.2766, 0.7872, 0.2766, 0.2553, 0.617 , 0.3404, 0.0426, 0.3191, 0.2128]]
 
+Dataset: MICRO (ID: 1546)
+Transformer - Train RMSE: 0.1723, Test RMSE: 0.3196
+Random Forest - Train RMSE: 0.0687, Test RMSE: 0.3067

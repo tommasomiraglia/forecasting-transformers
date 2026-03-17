@@ -6,9 +6,9 @@ from typing import List, Tuple
 from dataset.dataset import parse_whole_dataset_from_xls, SheetType, PreprocessingTimeSeries, DatasetTimeSeries
 
 from chronos import BaseChronosPipeline
-from tcan.TCAN.model import Transformer
-from tcan.TCAN.utils import Params
-from tcan.TCAN.model.Models import loss_fn
+# from tcan.TCAN.model import Transformer
+# from tcan.TCAN.utils import Params
+# from tcan.TCAN.model.Models import loss_fn
 
 from tqdm import tqdm
 
@@ -72,7 +72,7 @@ def main():
 
     datasets: List[Tuple[DatasetTimeSeries, DatasetTimeSeries]] = parse_whole_dataset_from_xls("M3C.xls", SheetType.MONTHLY, input_len=INPUT_LEN, output_len=OUTPUT_LEN, preprocessing=PreprocessingTimeSeries.MIN_MAX)
     datasets = [dataset for dataset in datasets if dataset[0].id in indices]
-    
+
     results = []
 
     if CHRONOS:
@@ -105,50 +105,50 @@ def main():
         for r in results:
             print(f"Dataset {r['dataset_id']}: RMSE={r['rmse']:.4f}")
 
-    if TCAN:
-        params = Params('tcan/TCAN/experiments/params_M3C.json')
-        params.dict["train_window"] = INPUT_LEN
-        params.dict["test_window"] = OUTPUT_LEN
-        params.dict["predict_steps"] = 6
-        params.dict["predict_start"] = OUTPUT_LEN - params.dict["predict_steps"]
-        params.dict["num_epochs"] = EPOCHS
-        params.dict["batch_size"] = BATCH_SIZE
-
-        dataset = "M3C"
-
-        tcan_model = Transformer(params, dataset)
-        tcan_model.train()
-
-        optimizer = torch.optim.Adam(tcan_model.parameters(), lr=1e-3)
-        torch.autograd.set_detect_anomaly(True)
-        for train_ds, _ in datasets:
-            train_loader = torch.utils.data.DataLoader(train_ds.tensor_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
-            test_loader = torch.utils.data.DataLoader(train_ds.tensor_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
-            for _ in range(EPOCHS):
-                if _ % 50 == 0:
-                    print(f"Dataset {train_ds.id}: TCAN Epoch {_}")
-                for X_batch, Y_batch in train_loader:
-                    X_batch = X_batch.unsqueeze(-1)
-                    Y_batch = Y_batch.unsqueeze(-1)
-                    optimizer.zero_grad()
-                    mu, sigma = tcan_model(X_batch, Y_batch)
-                    labels = Y_batch.squeeze(-1)
-                    loss = loss_fn(mu, sigma, labels, params.dict["predict_start"])
-                    loss.backward()
-                    optimizer.step()
-            tcan_model.eval()
-            losses = []
-            for X_batch, Y_batch in test_loader:
-                X_batch = X_batch.unsqueeze(-1)
-                Y_batch = Y_batch.unsqueeze(-1)
-                with torch.no_grad():
-                    mu, sigma = tcan_model(X_batch, Y_batch)
-                    labels = Y_batch.squeeze(-1)[:, params.dict["predict_start"]:]
-                    loss = compute_rmse(mu, sigma, labels, mask_value=0.0, predictive=True)
-                    losses.append(loss)
-            print(f"Dataset {train_ds.id}: TCAN Test Loss: {sum(losses)/len(losses):.4f}")
-
-
-
+    # if TCAN:
+    #    params = Params('tcan/TCAN/experiments/params_M3C.json')
+    #    params.dict["train_window"] = INPUT_LEN
+    #    params.dict["test_window"] = OUTPUT_LEN
+    #    params.dict["predict_steps"] = 6
+    #    params.dict["predict_start"] = OUTPUT_LEN - params.dict["predict_steps"]
+    #    params.dict["num_epochs"] = EPOCHS
+    #    params.dict["batch_size"] = BATCH_SIZE
+#
+#    dataset = "M3C"
+#
+#    tcan_model = Transformer(params, dataset)
+#    tcan_model.train()
+#
+#    optimizer = torch.optim.Adam(tcan_model.parameters(), lr=1e-3)
+#    torch.autograd.set_detect_anomaly(True)
+#    for train_ds, _ in datasets:
+#        train_loader = torch.utils.data.DataLoader(train_ds.tensor_dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
+#        test_loader = torch.utils.data.DataLoader(train_ds.tensor_dataset, batch_size=BATCH_SIZE, shuffle=False, drop_last=True)
+#        for _ in range(EPOCHS):
+#            if _ % 50 == 0:
+#                print(f"Dataset {train_ds.id}: TCAN Epoch {_}")
+#            for X_batch, Y_batch in train_loader:
+#                X_batch = X_batch.unsqueeze(-1)
+#                Y_batch = Y_batch.unsqueeze(-1)
+#                optimizer.zero_grad()
+#                mu, sigma = tcan_model(X_batch, Y_batch)
+#                labels = Y_batch.squeeze(-1)
+#                loss = loss_fn(mu, sigma, labels, params.dict["predict_start"])
+#                loss.backward()
+#                optimizer.step()
+#        tcan_model.eval()
+#        losses = []
+#        for X_batch, Y_batch in test_loader:
+#            X_batch = X_batch.unsqueeze(-1)
+#            Y_batch = Y_batch.unsqueeze(-1)
+#            with torch.no_grad():
+#                mu, sigma = tcan_model(X_batch, Y_batch)
+#                labels = Y_batch.squeeze(-1)[:, params.dict["predict_start"]:]
+#                loss = compute_rmse(mu, sigma, labels, mask_value=0.0, predictive=True)
+#                losses.append(loss)
+#        print(f"Dataset {train_ds.id}: TCAN Test Loss: {sum(losses)/len(losses):.4f}")
+#
+#
+#
 if __name__ == "__main__":
     main()
