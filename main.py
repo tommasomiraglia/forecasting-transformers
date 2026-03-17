@@ -108,7 +108,7 @@ def main():
         end_time = time.time()
         tim = end_time - start_time
         print(
-            f"ID: {train_dataset.id} - Time for training Transformer: {tim / EPOCHS:.2f} seconds"
+            f"ID: {train_dataset.id} - Time for training Transformer: {tim} seconds"
         )
 
         results[-1][0] = (train_loss**0.5, test_loss**0.5)  # RMSE
