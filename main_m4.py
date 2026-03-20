@@ -58,7 +58,7 @@ def parse_dataset_from_csv(
 def main():
     torch.manual_seed(42)
     print(f"Device: {'CUDA - ' + torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
-    OUTPUT_LEN = 18
+    OUTPUT_LEN = 8
     EMBED_SIZE = 36
     NUM_HEADS = 4
     ENCODER_SIZE = 1
@@ -126,8 +126,8 @@ def main():
                 [
                     train_dataset.id,
                     train_dataset.category,
-                    f"{train_rmse:.4f}",
-                    f"{test_rmse:.4f}",
+                    f"{train_rmse:.3f}",
+                    f"{test_rmse:.3f}",
                     f"{tim:.2f}",
                 ]
             )

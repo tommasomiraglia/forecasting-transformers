@@ -105,6 +105,7 @@ df_results = pd.DataFrame(
     }
 )
 df_results["time"] = df_results["time"].round(2)
+df_results["nrmse"] = df_results["nrmse"].round(3)
 
 # print("NRMSE medio per categoria:")
 # print(df_results.groupby("category")["nrmse"].mean().round(4).to_string())
