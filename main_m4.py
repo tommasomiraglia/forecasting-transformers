@@ -55,9 +55,45 @@ def parse_dataset_from_csv(
     return datasets
 
 
+def run_inference(model, data_loader, device="cpu"):
+    """
+    Runs model inference on the test DataLoader.
+    Batches from DatasetTimeSeries have shape:
+      - input:  (batch, timesteps, 1)
+      - target: (batch, output_len, 1)
+    Returns last-window targets and predictions, shape (output_len,).
+    """
+    model.eval()
+    all_targets = []
+    all_preds = []
+
+    with torch.no_grad():
+        for inputs, targets in data_loader:
+            inputs = inputs.to(device)
+
+            preds = model(inputs)
+
+            if preds.dim() == 3:
+                preds = preds.squeeze(-1)
+            if targets.dim() == 3:
+                targets = targets.squeeze(-1)
+
+            all_targets.append(targets.cpu().numpy())
+            all_preds.append(preds.cpu().numpy())
+
+    all_targets = np.concatenate(all_targets, axis=0)  # (N_windows, output_len)
+    all_preds = np.concatenate(all_preds, axis=0)  # (N_windows, output_len)
+
+    # Ultima finestra = orizzonte reale di forecast
+    return all_targets[-1], all_preds[-1]  # (output_len,), (output_len,)
+
+
 def main():
     torch.manual_seed(42)
-    print(f"Device: {'CUDA - ' + torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+    print(
+        f"Device: {'CUDA - ' + torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}"
+    )
+
     OUTPUT_LEN = 8
     EMBED_SIZE = 36
     NUM_HEADS = 4
@@ -73,15 +109,26 @@ def main():
         "M4sample.csv",
         sheet_type=SHEET_TYPE,
         output_len=OUTPUT_LEN,
-        preprocessing=PreprocessingTimeSeries.MIN_MAX, #pre normalizzati
+        preprocessing=PreprocessingTimeSeries.MIN_MAX,
     )
 
     input_len = SHEET_TYPE.to_recurrence()
 
+    # CSV summary — una riga per serie
     log_path = "results_m4_dec.csv"
     if not os.path.exists(log_path):
         with open(log_path, "w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(["id", "category", "train_rmse", "test_rmse", "train_time_s"])
+            csv.writer(f).writerow(
+                ["id", "category", "train_rmse", "test_rmse", "train_time_s"]
+            )
+
+    # CSV detail — una riga per step
+    detail_path = "results_m4_dec_detail.csv"
+    if not os.path.exists(detail_path):
+        with open(detail_path, "w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(
+                ["M4id", "category", "step", "ground_truth", "prediction", "residual"]
+            )
 
     for train_dataset, test_dataset in datasets:
         print(f"Training on dataset: {train_dataset.category} (ID: {train_dataset.id})")
@@ -101,7 +148,7 @@ def main():
         train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
         test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-        # train del transformer
+        # Training
         start_time = time.time()
         train_loss, test_loss = train_transformer_model(
             model=model,
@@ -114,13 +161,17 @@ def main():
             early_stopping_patience=5,
         )
         end_time = time.time()
+
         train_rmse = train_loss**0.5
         test_rmse = test_loss**0.5
         tim = end_time - start_time
+
         print(
-            f"ID: {train_dataset.id} - Time for training Transformer: {tim:.2f} seconds"
+            f"ID: {train_dataset.id} - Time: {tim:.2f}s | "
+            f"Train RMSE: {train_rmse:.3f} | Test RMSE: {test_rmse:.3f}"
         )
 
+        # Summary CSV
         with open(log_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(
                 [
@@ -131,6 +182,29 @@ def main():
                     f"{tim:.2f}",
                 ]
             )
+
+        # Inference per il detail CSV
+        try:
+            last_target, last_pred = run_inference(model, test_loader)
+            residuals = last_target - last_pred
+
+            with open(detail_path, "a", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                for step, (gt, pr, res) in enumerate(
+                    zip(last_target, last_pred, residuals), start=1
+                ):
+                    writer.writerow(
+                        [
+                            train_dataset.id,
+                            train_dataset.category,
+                            step,
+                            round(float(gt), 4),
+                            round(float(pr), 4),
+                            round(float(res), 4),
+                        ]
+                    )
+        except Exception as e:
+            print(f"  [WARN] Inference fallita per {train_dataset.id}: {e}")
 
 
 if __name__ == "__main__":
