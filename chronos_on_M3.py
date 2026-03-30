@@ -1,3 +1,5 @@
+# Utilizzato per fare qualche test veloce su serie M3 utilizzando chronos stessa struttura di comparisons.py 
+
 import torch
 import pandas as pd
 import numpy as np

@@ -1,13 +1,20 @@
+# Script per l'utilizzo di timeGpt su M4samples.csv
+
 import time
 import pandas as pd
 import numpy as np
 from nixtla import NixtlaClient
 from sklearn.metrics import mean_squared_error
+from pathlib import Path
 
 NIXTLA_API_KEY = "nixak-e4e331db7a518fac676737d6eff5f04e9d7e0873a6269b6ab5e375b836f12fb1c03777b18fec5483"
 
-np.random.seed(42)
+# PARAMETRI STRUTTURALI
+MODEL_NAME = "timegpt-1" 
+FREQ = "QS"    # frequenza serie: QS=quarterly
+LEVEL = [50]  # intervalli di confidenza da calcolare utile per limiti superiori ed inferiori ma non ci serve
 
+# CREAZIONE test e train set gia normalizzati
 df = pd.read_csv("M4sample.csv")
 value_cols = [c for c in df.columns if c.startswith("V") and c != "V1"]
 
@@ -45,13 +52,18 @@ print(f"Serie caricate: {len(records)}\n")
 
 client = NixtlaClient(api_key=NIXTLA_API_KEY)
 
+# timegpt richiede un dataframe con tre colonne obbligatorie:
+# - unique_id : identifica la serie 
+# - ds        : data/timestamp del valore
+# - y         : valore della serie in quel momento
+#
 train_rows = []
 for item in records:
     for t, val in enumerate(item["train"]):
         train_rows.append(
             {
                 "unique_id": item["id"],
-                "ds": pd.Timestamp("2000-01-01") + pd.DateOffset(months=t),
+                "ds": pd.Timestamp("2000-01-01") + pd.DateOffset(months=t * 3),
                 "y": val,
             }
         )
@@ -77,9 +89,9 @@ for horizon, ids in horizon_groups.items():
     forecast_df = client.forecast(
         df=df_group,
         h=horizon,
-        freq="MS",
-        model="timegpt-1",
-        level=[50],
+        freq=FREQ,
+        model=MODEL_NAME,
+        level=LEVEL,
         time_col="ds",
         target_col="y",
         id_col="unique_id",
@@ -126,7 +138,8 @@ df_results = pd.DataFrame(
 df_results["time"] = df_results["time"].round(2)
 df_results["rmse"] = df_results["rmse"].round(3)
 
-output_path = "timegpt_rmse_resultsM4.csv"
+directory = Path("results")
+output_path = directory / "timegpt_rmse_resultsM4.csv"
 df_results.to_csv(output_path, index=False)
 print(f"\nRisultati salvati in: {output_path}")
 
@@ -149,6 +162,6 @@ for uid, cat, actual, forecast in zip(
         )
 
 df_detail = pd.DataFrame(rows)
-detail_path = "timegpt_detail_M4.csv"
+detail_path = directory / "timegpt_detail_M4.csv"
 df_detail.to_csv(detail_path, index=False)
 print(f"Dettaglio step-by-step salvato in: {detail_path}")

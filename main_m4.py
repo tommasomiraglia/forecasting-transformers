@@ -9,7 +9,7 @@ import numpy as np
 import time
 import csv
 import os
-
+from pathlib import Path
 
 def parse_dataset_from_csv(
     csv_path: str,
@@ -59,8 +59,8 @@ def run_inference(model, data_loader, device="cpu"):
     """
     Runs model inference on the test DataLoader.
     Batches from DatasetTimeSeries have shape:
-      - input:  (batch, timesteps, 1)
-      - target: (batch, output_len, 1)
+    - input:  (batch, timesteps, 1)
+    - target: (batch, output_len, 1)
     Returns last-window targets and predictions, shape (output_len,).
     """
     model.eval()
@@ -115,7 +115,8 @@ def main():
     input_len = SHEET_TYPE.to_recurrence()
 
     # CSV summary — una riga per serie
-    log_path = "results_m4_dec.csv"
+    directory = Path("results")
+    log_path = directory / "results_m4_dec.csv"
     if not os.path.exists(log_path):
         with open(log_path, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(
@@ -123,7 +124,7 @@ def main():
             )
 
     # CSV detail — una riga per step
-    detail_path = "results_m4_dec_detail.csv"
+    detail_path = directory / "results_m4_dec_detail.csv"
     if not os.path.exists(detail_path):
         with open(detail_path, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(

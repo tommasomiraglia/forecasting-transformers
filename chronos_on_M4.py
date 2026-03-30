@@ -1,11 +1,20 @@
+# Script per l'utilizzo di chronos sulle serie M4samples.csv
+
 import time
 import pandas as pd
 import numpy as np
 import torch
 from chronos import ChronosPipeline
 from sklearn.metrics import mean_squared_error
+from pathlib import Path
 
-torch.manual_seed(42)
+# il seed non è un fattore critico su chronos,
+# in questo caso serve solo alla riproducibilità dei dati
+torch.manual_seed(42) 
+
+# PULIZIA M4sample :
+# - creo una lista di dizionari
+# - train e test sono due numpy array
 df = pd.read_csv("M4sample.csv")
 value_cols = [c for c in df.columns if c.startswith("V") and c != "V1"]
 
@@ -31,14 +40,15 @@ for _, row in df.iterrows():
         }
     )
 
+# PARAMETRI
 MODEL_NAME = "amazon/chronos-t5-small"
 DEVICE = "cpu"
-NUM_SAMPLES = 20
+NUM_SAMPLES = 20 # il numero di previsioni che vengono fatte per ogni STEP
 
 pipeline = ChronosPipeline.from_pretrained(
     MODEL_NAME,
     device_map=DEVICE,
-    torch_dtype=torch.bfloat16,
+    torch_dtype=torch.bfloat16,  # precisione dei pesi da testare con 32 bit : torch.bfloat32
 )
 
 all_ids = []
@@ -54,12 +64,12 @@ for item in records:
 
     min_val = train.min()
     max_val = train.max()
-    scale = max_val - min_val + 1e-8
+    scale = max_val - min_val + 1e-8  # 1e-8 è solo per evitare divisione per zero nel caso tutti i valori fossero uguali
 
     train_norm = (train - min_val) / scale
     test_norm = (test - min_val) / scale
 
-    context = torch.tensor(train_norm, dtype=torch.float32).unsqueeze(0)
+    context = torch.tensor(train_norm, dtype=torch.float32).unsqueeze(0) # prepariamo il contesto per chronos 32 bit perchè avendo normalizzato prima conviene essere più precisi
 
     start_time = time.time()
     forecast = pipeline.predict(
@@ -104,7 +114,8 @@ df_results = pd.DataFrame(
 df_results["time"] = df_results["time"].round(2)
 df_results["rmse"] = df_results["rmse"].round(3)
 
-output_path = "chronos_nrmse_resultsM4.csv"
+directory = Path("results")
+output_path = directory / "chronos_nrmse_resultsM4.csv"
 df_results.to_csv(output_path, index=False)
 print(f"Risultati salvati in: {output_path}")
 
@@ -126,6 +137,6 @@ for uid, cat, actual, forecast, residuals in zip(
         )
 
 df_detail = pd.DataFrame(rows)
-detail_path = "chronos_detail_M4.csv"
+detail_path = directory / "chronos_detail_M4.csv"
 df_detail.to_csv(detail_path, index=False)
 print(f"Dettaglio step-by-step salvato in: {detail_path}")
