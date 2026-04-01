@@ -55,39 +55,6 @@ def parse_dataset_from_csv(
     return datasets
 
 
-def run_inference(model, data_loader, device="cpu"):
-    """
-    Runs model inference on the test DataLoader.
-    Batches from DatasetTimeSeries have shape:
-    - input:  (batch, timesteps, 1)
-    - target: (batch, output_len, 1)
-    Returns last-window targets and predictions, shape (output_len,).
-    """
-    model.eval()
-    all_targets = []
-    all_preds = []
-
-    with torch.no_grad():
-        for inputs, targets in data_loader:
-            inputs = inputs.to(device)
-
-            preds = model(inputs)
-
-            if preds.dim() == 3:
-                preds = preds.squeeze(-1)
-            if targets.dim() == 3:
-                targets = targets.squeeze(-1)
-
-            all_targets.append(targets.cpu().numpy())
-            all_preds.append(preds.cpu().numpy())
-
-    all_targets = np.concatenate(all_targets, axis=0)  # (N_windows, output_len)
-    all_preds = np.concatenate(all_preds, axis=0)  # (N_windows, output_len)
-
-    # Ultima finestra = orizzonte reale di forecast
-    return all_targets[-1], all_preds[-1]  # (output_len,), (output_len,)
-
-
 def main():
     torch.manual_seed(42)
     print(
@@ -146,12 +113,14 @@ def main():
             max_seq_length=input_len,
         )
 
-        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+        train_loader = DataLoader(
+            train_dataset, batch_size=BATCH_SIZE, shuffle=True
+        )  # shuffle=True : le finestre vengono mescolate ad ogni epoca, così il modello non impara l'ordine in cui gli vengono presentate ma il pattern vero
         test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
         # Training
         start_time = time.time()
-        train_loss, test_loss = train_transformer_model(
+        train_loss, test_loss, last_target, last_pred = train_transformer_model(
             model=model,
             epochs=EPOCHS,
             train_data_loader=train_loader,
@@ -160,12 +129,12 @@ def main():
             pretrain_seca=True,
             early_stopping=True,
             early_stopping_patience=5,
+            return_preds=True,  # restituisce anche target e pred dell'ultima finestra
         )
         end_time = time.time()
-
+        tim = end_time - start_time
         train_rmse = train_loss**0.5
         test_rmse = test_loss**0.5
-        tim = end_time - start_time
 
         print(
             f"ID: {train_dataset.id} - Time: {tim:.2f}s | "
@@ -186,9 +155,7 @@ def main():
 
         # Inference per il detail CSV
         try:
-            last_target, last_pred = run_inference(model, test_loader)
             residuals = last_target - last_pred
-
             with open(detail_path, "a", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 for step, (gt, pr, res) in enumerate(
